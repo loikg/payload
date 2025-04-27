@@ -7,43 +7,6 @@ import pg from 'pg'
 
 import type { PostgresAdapter } from './types.js'
 
-const connectWithReconnect = async function ({
-  adapter,
-  payload,
-  reconnect = false,
-}: {
-  adapter: PostgresAdapter
-  payload: Payload
-  reconnect?: boolean
-}) {
-  let result
-
-  if (!reconnect) {
-    result = await adapter.pool.connect()
-  } else {
-    try {
-      result = await adapter.pool.connect()
-    } catch (ignore) {
-      setTimeout(() => {
-        payload.logger.info('Reconnecting to postgres')
-        void connectWithReconnect({ adapter, payload, reconnect: true })
-      }, 1000)
-    }
-  }
-  if (!result) {
-    return
-  }
-  result.prependListener('error', (err) => {
-    try {
-      if (err.code === 'ECONNRESET') {
-        void connectWithReconnect({ adapter, payload, reconnect: true })
-      }
-    } catch (ignore) {
-      // swallow error
-    }
-  })
-}
-
 export const connect: Connect = async function connect(
   this: PostgresAdapter,
   options = {
@@ -62,7 +25,6 @@ export const connect: Connect = async function connect(
   try {
     if (!this.pool) {
       this.pool = new pg.Pool(this.poolOptions)
-      await connectWithReconnect({ adapter: this, payload: this.payload })
     }
 
     const logger = this.logger || false
